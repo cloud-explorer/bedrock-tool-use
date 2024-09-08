@@ -1,0 +1,4 @@
+requests
+PyMuPDF
+Pillow
+boto3
