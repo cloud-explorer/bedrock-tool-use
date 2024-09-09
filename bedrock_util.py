@@ -52,7 +52,7 @@ class BedrockUtils:
         Returns:
             dict: The response from the Bedrock model.
         """
-        print("Invoking Bedrock model...")
+        print(f"Invoking Bedrock model {self.model_id}...")
     
         response = self.bedrock.converse(
             modelId=self.model_id,
@@ -142,7 +142,7 @@ class BedrockUtils:
         """
 
         # Set maximum number of iterations to prevent infinite loops
-        MAX_LOOPS = 6
+        MAX_LOOPS = 10
         loop_count = 0
         continue_loop = True
 
@@ -154,9 +154,21 @@ class BedrockUtils:
             }
         ]
 
+        system_message = [
+            {
+                "text": (
+                    "Do not make up information. "
+                    "Before generating the information check multiple times if the information is correct. "
+                    "If needed go back and read the information provided to inderstand what is being asked." 
+                )
+            }
+        ]
+
         while continue_loop:
             # Call Bedrock API with the current message list and tools
-            response = self.invoke_bedrock(message_list=message_list, tool_list=tool_list)
+            response = self.invoke_bedrock(message_list=message_list, 
+                                           tool_list=tool_list, 
+                                           system_message = system_message)
 
             # Extract the response message from Bedrock's output
             response_message = response['output']['message']

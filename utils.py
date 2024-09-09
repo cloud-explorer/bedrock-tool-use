@@ -45,6 +45,28 @@ class FileUtility:
         os.makedirs(self.download_folder, exist_ok=True)
         self.s3_client = boto3.client('s3')
 
+    def generate_temp_folder_name(self, length=5):
+        """
+        Generate a random string of specified length.
+        
+        Args:
+            length (int): The length of the random string. Defaults to 5.
+        
+        Returns:
+            str: A random string of the specified length.
+        """
+        # Define the character set: lowercase letters and digits
+        characters = string.ascii_lowercase + string.digits
+
+        # Generate and return the random string
+        suffix = ''.join(random.choice(characters) for _ in range(length))
+
+        folder_name = "temp"
+        random_suffix = generate_random_suffix()
+        new_folder_name = f"{folder_name}_{random_suffix}"
+        return new_folder_name
+
+
     def download_from_url(self, url):
         """
         Download a file from a given URL.
