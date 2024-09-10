@@ -57,6 +57,19 @@ class IDPTools:
             missing_documents = tool_use_block['input']['missing_documents']
             responses = self.reject_incomplete_application(missing_documents)
             return responses
+        elif tool_use_name == 'extract_urla_loan_info':
+            print(tool_use_name)
+            loan_info = tool_use_name['input']['loan_info']
+            # Save data into DB here
+            return loan_info
+        elif tool_use_name == 'extract_urla_borrower_info':
+            borrower_info = tool_use_name['input']['borrower_info']
+            # Save data into DB here
+            return borrower_info
+        elif tool_use_name == 'extract_urla_employment_info':
+            employment_info = tool_use_name['input']['employment_info']
+            # Save data into DB here
+            return employment_info
         elif tool_use_name == 'extract_urla_info':
             loan_info = tool_use_block['input']['loan_info']
             borrower_info = tool_use_block['input']['borrower_info']
@@ -66,12 +79,14 @@ class IDPTools:
             declarations = tool_use_block['input']['declarations']
             responses = self.extract_urla_info(loan_info, borrower_info, employment_info, assets, liabilities, declarations)
             return responses
-        elif tool_use_name == 'extract_drivers_license_information':
+        elif tool_use_name == 'extract_drivers_license_info':
             print(tool_use_block['input'])
             license_info = tool_use_block['input']['license_info']
+            return license_info
+        elif tool_use_name == 'extract_drivers_license_personal_info':
+            print(tool_use_block['input'])
             personal_info = tool_use_block['input']['personal_info']
-            responses = self.extract_drivers_license_information(license_info, personal_info)
-            return responses
+            return personal_info
         elif tool_use_name == 'extract_w2_information':
             w2_information = tool_use_block['input']['w2_information']
             responses = self.extract_w2_information(w2_information)
@@ -114,10 +129,10 @@ class IDPTools:
                         continue
                     # Only use the first page for classification in multiple file case
                     binary_data_array.append((binary_data[0], media_type))
-                
+
                 if not binary_data_array:
                     return []
-                
+
                 message_content = [
                     {"image": {"format": media_type, "source": {"bytes": data}}}
                     for data, media_type in binary_data_array
@@ -157,51 +172,32 @@ class IDPTools:
             response_message = [response['output']['message']]
             # print("categorize_document output")
             # print(json.dumps(response_message, indent=4))
-            return response_message
+            return [response_message]
 
         except Exception as e:
             print(f"An error occurred: {str(e)}")
             return []
 
     def check_required_documents(self, classified_documents):
-        response_message = []
-        
-        # Parse the input if it's a string
+        # Check if classified_documents is a string
         if isinstance(classified_documents, str):
             try:
+                # Attempt to parse the string as JSON
                 classified_documents = json.loads(classified_documents)
             except json.JSONDecodeError:
-                print("Error decoding input JSON")
-                return ["Error occurred while processing input"]
+                # If parsing fails, return an error message
+                return ["Error: Invalid JSON string provided"]
     
-        # Ensure classified_documents is a dictionary
+        # Check if classified_documents is now a dictionary
         if not isinstance(classified_documents, dict):
-            print("Input is not a valid dictionary")
-            return ["Error: Invalid input format"]
-    
-        print(json.dumps(classified_documents, indent=4))
-        
+            return ["Error: Input must be a JSON object (dictionary)"]
+            
         # Extract keys and join them with commas
-        keys_list = list(classified_documents.keys())
+        keys_list = classified_documents.keys()
         doc_list = ', '.join(keys_list)
-    
-        # Use a constant for required documents
-        REQUIRED_DOCUMENTS = ["URLA", "Driver's License"]
-    
-        # Map document types to their standardized names
-        document_type_mapping = {
-            "URLA": "URLA",
-            "DRIVERS_LICENSE": "Driver's License",
-            "W2": "W2"
-        }
-    
-        # Check if required documents are present
-        present_documents = [document_type_mapping.get(doc_type, doc_type) for doc_type in keys_list]
-        missing_docs = [doc for doc in REQUIRED_DOCUMENTS if doc not in present_documents]
-    
-        if not missing_docs:
-            return []  # All required documents are present
-    
+
+        print (f"doc list is {doc_list}")
+        required_documents = ["URLA", "Drivers License"]
         message_list = [
             {
                 "role": 'user',
@@ -214,7 +210,7 @@ class IDPTools:
         system_message = [
             {
                 "text": (
-                    f"<required_documents>{', '.join(REQUIRED_DOCUMENTS)}</required_documents>"
+                    f"<required_documents>{', '.join(required_documents)}</required_documents>"
                     "<task>You are a mortgage agent. Your main task is to verify if "
                     "all the documents required (check <required_documents>) for a "
                     "mortgage application are present. Double check and triple check "
@@ -224,32 +220,8 @@ class IDPTools:
             }
         ]
     
-        try:
-            response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list, system_message=system_message)
-            if 'output' in response and 'message' in response['output']:
-                response_message.append(response['output']['message'])
-            else:
-                raise ValueError("Unexpected response format from Bedrock")
-        except Exception as e:
-            print(f"Error invoking Bedrock: {str(e)}")
-            return missing_docs  # Return the missing docs we found earlier
-    
-        # Validate the response
-        try:
-            bedrock_missing_docs = json.loads(response_message[0])
-            if not isinstance(bedrock_missing_docs, list):
-                raise ValueError("Response is not a valid JSON array")
-            # Ensure only valid document types are in the response
-            bedrock_missing_docs = [doc for doc in bedrock_missing_docs if doc in REQUIRED_DOCUMENTS]
-            
-            # Combine our findings with Bedrock's response
-            missing_docs = list(set(missing_docs + bedrock_missing_docs))
-        except json.JSONDecodeError:
-            print("Error decoding JSON response")
-        except ValueError as ve:
-            print(f"Invalid response format: {str(ve)}")
-    
-        return missing_docs
+        response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list, system_message=system_message)       
+        return [response['output']['message']]
 
     def reject_incomplete_application(self, missing_documents):
         # print(json.dumps(missing_documents, indent=4))
@@ -269,7 +241,7 @@ class IDPTools:
         
         response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list, system_message=system_message)
         response_message.append(response['output']['message'])
-        return response_message
+        return [response_message]
 
     def extract_urla_info(self, loan_info, borrower_info, employment_info, assets, liabilities, declarations):
         self.print_urla_info(loan_info, borrower_info, employment_info, assets, liabilities, declarations)
