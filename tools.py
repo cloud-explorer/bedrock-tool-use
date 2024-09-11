@@ -7,7 +7,7 @@ from tool_error import ToolError
 
 UNKNOWN_TYPE = "UNK"
 DOCUMENT_TYPES = ["URLA", "W2", "PAY_STUB", "DRIVERS_LICENSE", UNKNOWN_TYPE]
-
+TEMP_FOLDER = "temp"
 class IDPTools:
 
     def __init__(self):
@@ -38,13 +38,16 @@ class IDPTools:
         tool_use_name = tool_use_block['name']
     
         print(f"Using tool {tool_use_name}")
-        
+        file_util = FileUtility(download_folder=TEMP_FOLDER)
         if tool_use_name == 'download_application_package':
-            file_util = FileUtility(download_folder=tool_use_block['input']['target_folder'])
             # Download file from S3
             file_path = file_util.unzip_from_s3(tool_use_block['input']['source_bucket']
                                                    , tool_use_block['input']['source_key'])
             return file_path
+        elif tool_use_name == 'pdf_to_images':
+            pdf_path = tool_use_block['input']['pdf_path']
+            image_list = file_util.save_pdf_pages_as_png(pdf_path)
+            return image_list
         elif tool_use_name == 'classify_documents':
             document_paths = tool_use_block['input']['document_paths']
             responses = self.categorize_document(document_paths)
@@ -59,17 +62,17 @@ class IDPTools:
             return responses
         elif tool_use_name == 'extract_urla_loan_info':
             print(tool_use_name)
-            loan_info = tool_use_name['input']['loan_info']
+            loan_info = tool_use_block['input']['loan_info']
             # Save data into DB here
-            return loan_info
+            return [(json.dumps(loan_info))]
         elif tool_use_name == 'extract_urla_borrower_info':
-            borrower_info = tool_use_name['input']['borrower_info']
+            borrower_info = tool_use_block['input']['borrower_info']
             # Save data into DB here
-            return borrower_info
+            return [(json.dumps(borrower_info))]
         elif tool_use_name == 'extract_urla_employment_info':
-            employment_info = tool_use_name['input']['employment_info']
+            employment_info = tool_use_block['input']['employment_info']
             # Save data into DB here
-            return employment_info
+            return [(json.dumps(employment_info))]
         elif tool_use_name == 'extract_urla_info':
             loan_info = tool_use_block['input']['loan_info']
             borrower_info = tool_use_block['input']['borrower_info']
@@ -142,37 +145,62 @@ class IDPTools:
                 "role": 'user',
                 "content": [
                     *message_content,
-                    {"text": "What types of documents are in this document?"}
+                    {"text": "What types of document is in this image?"}
                 ]
             }]
-
+            # print(json.dumps(file_paths, indent=4))
             system_message = [{
                 "text": (
-                    "<task>You are a document processing agent and you have perfect vision. "
-                    "Look through every image presented and categorize them based on the doc_type_choices. "
-                    "There might be multiple types of documents on a given image. "
-                    "Look carefully to see what documents are there. Double check if needed. "
-                    "Finally produce a combined list of all the types of documents attached. "
-                    "Include the start and end page numbers from the document in the outpu</task> "
-                    f"<doc_type_choices>{', '.join(DOCUMENT_TYPES)}</doc_type_choices> "
-                    "<output_format>{'docs': [{'type':[doc_type], 'file_path': [file_path], "
-                    "'start_page_number': [start_page_number], 'end_page_number':[end_page_number]}]}</output_format>"
-                    "In this case PS means pay stub, DL means driver's license, and UNK means unknown. "
-                    "<important>Include only the answer in the <output_format> and nothing else. "
-                    "Double check if the start and end page numbers included in the output are the right document type</important>"
-                )
+                            "<task>"
+                                "You are a document processing agent and you have perfect vision. "
+                                "Look through every image presented and categorize them based on the <doc_type_choices>. "
+                                "The final output is a json array with an element for each image. "
+                                "Each element in the output array contains the classified_doc_type and the file_path"  
+                            "</task> "
+                            f"<doc_type_choices>{', '.join(DOCUMENT_TYPES)}</doc_type_choices> "
+                            "<output_format>"
+                                "{'docs': [{'type':value_for_doc_type, 'file_paths': array__for_file_path}]}"
+                            "</output_format>"
+                            "In this case PS means pay stub, DL means driver's license, and UNK means unknown. "
+                            "<important>"
+                                "the output has to only be a json array in the <output_format> only. do not include anything else. "
+                            "</important>"
+                            f"<file_paths>{json.dumps(file_paths, indent=4)}</file_paths>"
+                            "<example_output>"
+                                "{"
+                                  "'documents': ["
+                                    "{"
+                                      "'type': 'URLA',"
+                                      "'files': ["
+                                        "'example/1.png',"
+                                        "'example/2.png',"
+                                        "'example/3.png',"
+                                      "]"
+                                    "},"
+                                    "{"
+                                      "'type': 'DL',"
+                                      "'files': ["
+                                        "'example/4.png'"
+                                      "]"
+                                    "},"
+                                    "{"
+                                      "'type': 'W2"
+                                      "'files': ["
+                                        "'example/5.png'"
+                                      "]"
+                                    "}"
+                                  "]"
+                                "}"
+                            "</example_output>"
+                    )
             }]
-
-            # print(json.dumps(system_message, indent=4))
 
             response = self.sonnet_bedrock_utils.invoke_bedrock(
                 message_list=message_list,
                 system_message=system_message
             )
             response_message = [response['output']['message']]
-            # print("categorize_document output")
-            # print(json.dumps(response_message, indent=4))
-            return [response_message]
+            return response_message
 
         except Exception as e:
             print(f"An error occurred: {str(e)}")
@@ -197,12 +225,12 @@ class IDPTools:
         doc_list = ', '.join(keys_list)
 
         print (f"doc list is {doc_list}")
-        required_documents = ["URLA", "Drivers License"]
+        required_documents = ["URLA", "DRIVERS_LICENSE"]
         message_list = [
             {
                 "role": 'user',
                 "content": [
-                    {"text": f"The loan application has the following documents: {doc_list}. Are all the required documents present?"}
+                    {"text": f"The loan application has the following documents: <doc_list>{doc_list}</doc_list>. Are all the required documents present?"}
                 ]
             }
         ]
@@ -211,10 +239,10 @@ class IDPTools:
             {
                 "text": (
                     f"<required_documents>{', '.join(required_documents)}</required_documents>"
-                    "<task>You are a mortgage agent. Your main task is to verify if "
+                    "<task>You are a mortgage agent with attention to detail. "
+                    "Your main task is to verify if "
                     "all the documents required (check <required_documents>) for a "
-                    "mortgage application are present. Double check and triple check "
-                    "the output if needed.</task> <output>only output a json array "
+                    "mortgage application are present. Pay close attention to <doc_list> and determine if the docs are present.</task> <output>only output a json array "
                     "of the missing document type</output>"
                 )
             }
