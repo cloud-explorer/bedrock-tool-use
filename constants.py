@@ -48,8 +48,7 @@ class ToolConfig:
             {
                 "toolSpec": {
                     "name": "download_application_package",
-                    "description": ("Downloads the file containing loan application documents from S3, "
-                                    "extracts its content and returns a list of paths of extracted files, or None if extraction failed."),
+                    "description": "Downloads the file containing loan application documents from S3, extracts its content and returns a list of paths of extracted files, or None if extraction failed.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
@@ -68,6 +67,24 @@ class ToolConfig:
                                 }
                             },
                             "required": ["source_bucket", "source_key", "target_folder"]
+                        }
+                    }
+                }
+            },
+            {
+                "toolSpec": {
+                    "name": "pdf_to_images",
+                    "description": "Get triggered if the incoming file is a PDF. Converts a PDF file to a series of image files and returns their file paths.",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                "pdf_path": {
+                                    "type": "string",
+                                    "description": "Path to the input PDF file."
+                                }
+                            },
+                            "required": ["pdf_path"]
                         }
                     }
                 }
@@ -135,35 +152,33 @@ class ToolConfig:
              {
                 "toolSpec": {
                     "name": "extract_urla_loan_info",
-                    "description": "Extract loan information from the Uniform Residential Loan Application (URLA) form.",
+                    "description": "Extract loan information from 'Section 4: Loan and Property Information' (page 1) of the Uniform Residential Loan Application (URLA) form.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
                             "properties": {
                                 "loan_info": {
-                                    "json": {
-                                        "type": "object",
-                                        "properties": {
-                                            "loan_amount": {
-                                                "type": "number",
-                                                "description": "The loan amount requested"
-                                            },
-                                            "loan_purpose": {
-                                                "type": "string",
-                                                "enum": ["Purchase", "Refinance", "Other"],
-                                                "description": "The purpose of the loan"
-                                            },
-                                            "property_address": {
-                                                "type": "string",
-                                                "description": "The full address of the property"
-                                            },
-                                            "property_value": {
-                                                "type": "number",
-                                                "description": "The value of the property"
-                                            }
+                                    "type": "object",
+                                    "properties": {
+                                        "loan_amount": {
+                                            "type": "number",
+                                            "description": "The loan amount requested"
                                         },
-                                        "required": ["loan_amount", "loan_purpose", "property_address"]
-                                    }
+                                        "loan_purpose": {
+                                            "type": "string",
+                                            "enum": ["Purchase", "Refinance", "Other"],
+                                            "description": "The purpose of the loan"
+                                        },
+                                        "property_address": {
+                                            "type": "string",
+                                            "description": "The full address of the property"
+                                        },
+                                        "property_value": {
+                                            "type": "number",
+                                            "description": "The value of the property"
+                                        }
+                                    },
+                                    "required": ["loan_amount", "loan_purpose", "property_address"]
                                 }
                             },
                             "required": ["loan_info"]
@@ -174,7 +189,7 @@ class ToolConfig:
             {
                 "toolSpec": {
                     "name": "extract_urla_borrower_info",
-                    "description": "Extract borrower information from the Uniform Residential Loan Application (URLA) form.",
+                    "description": "Extract borrower information from 'Section 1: Borrower Information' (page 4) of the Uniform Residential Loan Application (URLA) form.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
@@ -333,5 +348,6 @@ class ToolConfig:
                         }
                     }
                 }
-            }      
-        ]
+            }
+                  
+    ]
