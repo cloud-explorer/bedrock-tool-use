@@ -173,24 +173,13 @@ class ToolConfig:
                             "type": "object",
                             "properties": {
                                 "urla_document_paths": {
-                                    "type": "object",
-                                    "properties": {
-                                        "file_paths": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            },
-                                            "description": "Paths to the files that were classified for this category"
-                                        },
-                                        "category": {
-                                            "type": "string",
-                                            "enum": ["URLA", "DRIVERS_LICENSE", "UNK"],
-                                            "description": "The category of the document"
-                                        }
-                                    }
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Paths to the files that were classified as URLA"
                                 }
                             },
-                                
                         }
                     }
                 }
@@ -240,6 +229,26 @@ class ToolConfig:
                         "json": {
                             "type": "object",
                             "properties": {
+                                "urla_document_paths": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Paths to the files that were classified as URLA"
+                                }
+                            },
+                        }
+                    }
+                }
+            },
+            {
+                "toolSpec": {
+                    "name": "save_urla_borrower_info",
+                    "description": "Triggered after saving loan information. Save borrower information from 'Section 1: Borrower Information' of the Uniform Residential Loan Application (URLA) form.",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
                                 "borrower_info": {
                                     "type": "object",
                                     "properties": {
@@ -272,9 +281,13 @@ class ToolConfig:
                                         "current_address": {
                                             "type": "string",
                                             "description": "Current address of the borrower"
+                                        },
+                                        "email_id": {
+                                            "type": "string",
+                                            "description": "Email of the borrower"
                                         }
                                     },
-                                    "required": ["name", "ssn", "dob", "citizenship", "marital_status", "current_address"]
+                                    "required": ["name", "ssn", "dob", "citizenship", "marital_status", "current_address", "email_id"]
                                 }
                             },
                             "required": ["borrower_info"]
@@ -284,44 +297,28 @@ class ToolConfig:
             },
             {
                 "toolSpec": {
-                    "name": "extract_urla_employment_info",
-                    "description": "Extract employment information from the Uniform Residential Loan Application (URLA) form.",
+                    "name": "extract_drivers_info",
+                    "description": "Extract license information from a driver's license.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
                             "properties": {
-                                "employment_info": {
-                                    "type": "object",
-                                    "properties": {
-                                        "employer_name": {
-                                            "type": "string",
-                                            "description": "Name of the current employer"
-                                        },
-                                        "position": {
-                                            "type": "string",
-                                            "description": "Current job position or title"
-                                        },
-                                        "start_date": {
-                                            "type": "string",
-                                            "description": "Start date of current employment"
-                                        },
-                                        "monthly_income": {
-                                            "type": "number",
-                                            "description": "Total monthly income"
-                                        }
+                                "dl_document_paths": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
                                     },
-                                    "required": ["employer_name", "position", "start_date", "monthly_income"]
+                                    "description": "Paths to the files that were classified as DRIVERS_LICENSE"
                                 }
                             },
-                            "required": ["employment_info"]
                         }
                     }
                 }
             },
             {
                 "toolSpec": {
-                    "name": "extract_drivers_license_info",
-                    "description": "Extract license information from a driver's license. Double check the information before generating result and make sure the output is a valid json",
+                    "name": "save_drivers_info",
+                    "description": "Save license information from a driver's license. Double check the information before generating result and make sure the output is a valid json",
                     "inputSchema": {
                         "json": {
                             "type": "object",
@@ -329,6 +326,23 @@ class ToolConfig:
                                 "license_info": {
                                     "type": "object",
                                     "properties": {
+                                        "full_name": {
+                                            "type": "string",
+                                            "description": "Full name of the license holder"
+                                        },
+                                        "address": {
+                                            "type": "string",
+                                            "description": "Current address of the license holder"
+                                        },
+                                        "date_of_birth": {
+                                            "type": "string",
+                                            "description": "Date of birth of the license holder"
+                                        },
+                                        "sex": {
+                                            "type": "string",
+                                            "enum": ["M", "F", "X"],
+                                            "description": "Sex of the license holder"
+                                        },
                                         "license_number": {
                                             "type": "string",
                                             "description": "The driver's license number"
@@ -350,7 +364,7 @@ class ToolConfig:
                                             "description": "The date the license expires"
                                         }
                                     },
-                                    "required": ["license_number", "class", "state", "issue_date", "expiration_date"]
+                                    "required": ["full_name", "address", "date_of_birth", "sex","license_number", "class", "state", "issue_date", "expiration_date"]
                                 }
                             },
                             "required": ["license_info"]
@@ -360,37 +374,18 @@ class ToolConfig:
             },
             {
                 "toolSpec": {
-                    "name": "extract_drivers_license_personal_info",
-                    "description": "Extract personal information from a driver's license. Double check the information before generating result and make sure the output is a valid json",
+                    "name": "clean_up_tool",
+                    "description": "This tool should always get called as the last tool use. This tool is very important. This will clean up any resources, files or folders that were created",
                     "inputSchema": {
                         "json": {
                             "type": "object",
                             "properties": {
-                                "personal_info": {
-                                    "type": "object",
-                                    "properties": {
-                                        "full_name": {
-                                            "type": "string",
-                                            "description": "Full name of the license holder"
-                                        },
-                                        "address": {
-                                            "type": "string",
-                                            "description": "Current address of the license holder"
-                                        },
-                                        "date_of_birth": {
-                                            "type": "string",
-                                            "description": "Date of birth of the license holder"
-                                        },
-                                        "sex": {
-                                            "type": "string",
-                                            "enum": ["M", "F", "X"],
-                                            "description": "Sex of the license holder"
-                                        }
-                                    },
-                                    "required": ["full_name", "address", "date_of_birth", "sex"]
+                                "temp_folder_paths": {
+                                    "type": "string",
+                                    "description": "Paths to the temporary folder where all the files were stored"
                                 }
                             },
-                            "required": ["personal_info"]
+                            "required": ["temp_folder_paths"]
                         }
                     }
                 }

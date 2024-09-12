@@ -5,9 +5,10 @@ from utils import FileUtility
 from bedrock_util import BedrockUtils
 from tool_error import ToolError
 
+file_util = FileUtility()
 UNKNOWN_TYPE = "UNK"
 DOCUMENT_TYPES = ["URLA", "DRIVERS_LICENSE", UNKNOWN_TYPE]
-TEMP_FOLDER = "temp"
+TEMP_FOLDER = file_util.generate_temp_folder_name(5)
 class IDPTools:
 
     def __init__(self):
@@ -25,7 +26,7 @@ class IDPTools:
 
     def get_binary_for_file(self, file_path):
         binary_data = ""
-        file_util = FileUtility()
+        
         if file_path.endswith('.pdf'):
             binary_data = file_util.pdf_to_png_bytes(file_path)
             media_type = "png"
@@ -38,8 +39,10 @@ class IDPTools:
 
     def get_tool_result(self, tool_use_block):
         tool_use_name = tool_use_block['name']
-    
+        urla_max_pages = 9
+        drivers_license_max_page = 1
         print(f"Using tool {tool_use_name}")
+        print(f"using temp folder {TEMP_FOLDER}")
         file_util = FileUtility(download_folder=TEMP_FOLDER)
         if tool_use_name == 'download_application_package':
             # Download file from S3
@@ -63,47 +66,43 @@ class IDPTools:
             responses = self.reject_incomplete_application(missing_documents)
             return responses
         elif tool_use_name == 'extract_urla_loan_info':
-            # loan_info = tool_use_block['input']['loan_info']
-            # print(loan_info)
-            # Save data into DB here
-            # return [(json.dumps(loan_info))]
             urla_document_paths = tool_use_block['input']['urla_document_paths']
-            return self.extract_urla_loan_info(urla_document_paths)
+            # Loan information is on page 5
+            page_num = 5
+            return self.extract_info(urla_document_paths, page_num, urla_max_pages)
         elif tool_use_name == 'save_urla_loan_info':
             loan_info = tool_use_block['input']['loan_info']
-            print(loan_info)
-            # Save data into DB here
-            # return [(json.dumps(loan_info))]
-            #urla_document_paths = tool_use_block['input']['urla_document_paths']
-            #return self.extract_urla_loan_info(urla_document_paths)
+            return {
+                "status": True,
+                "loan_info": loan_info,
+                # "next_action": "extract_urla_borrower_info"
+            }
         elif tool_use_name == 'extract_urla_borrower_info':
+            file_paths = tool_use_block['input']['urla_document_paths']
+            # Borrower information is on page 1
+            page_num = 1
+            return self.extract_info(file_paths, page_num, urla_max_pages)
+        elif tool_use_name == 'save_urla_borrower_info':
             borrower_info = tool_use_block['input']['borrower_info']
-            # Save data into DB here
-            return [(json.dumps(borrower_info))]
-        elif tool_use_name == 'extract_urla_employment_info':
-            employment_info = tool_use_block['input']['employment_info']
-            # Save data into DB here
-            return [(json.dumps(employment_info))]
-        elif tool_use_name == 'extract_urla_info':
-            loan_info = tool_use_block['input']['loan_info']
-            borrower_info = tool_use_block['input']['borrower_info']
-            employment_info = tool_use_block['input']['employment_info']
-            assets = tool_use_block['input']['assets']
-            liabilities = tool_use_block['input']['liabilities']
-            declarations = tool_use_block['input']['declarations']
-            responses = self.extract_urla_info(loan_info, borrower_info, employment_info, assets, liabilities, declarations)
-            return responses
-        elif tool_use_name == 'extract_drivers_license_info':
-            print(tool_use_block['input'])
+            return {
+                "status": True,
+                "borrower_info": borrower_info,
+                # "next_action": "extract_drivers_personal_info"
+            }
+        elif tool_use_name == 'extract_drivers_info':
+            file_paths = tool_use_block['input']['dl_document_paths']
+            # There is only one page
+            page_num = 1
+            return self.extract_info(file_paths, page_num, drivers_license_max_page)
+        elif tool_use_name == 'save_drivers_info':
             license_info = tool_use_block['input']['license_info']
-            return license_info
-        elif tool_use_name == 'extract_drivers_license_personal_info':
-            print(tool_use_block['input'])
-            personal_info = tool_use_block['input']['personal_info']
-            return personal_info
-        elif tool_use_name == 'stop_tool':
-            stop_reason = tool_use_block['input']['stop_reason']
-            print(json.dumps(stop_reason, indent=4))
+            return {
+                "status": True,
+                "license_info": license_info
+            }
+        elif tool_use_name == 'clean_up_tool':
+            temp_folder = tool_use_block['input']['temp_folder_paths']
+            print(f"Deleting folder {temp_folder}")
             return
         else:
             raise ToolError(f"Invalid function name: {tool_use_name}")
@@ -269,64 +268,6 @@ class IDPTools:
             print(f"Missing documents: {', '.join(missing_documents)}")
             return missing_documents
 
-
-        ######################################
-        # TODO: 
-        # Code below here will not be hit
-        # Code left behind just for reference. 
-        # Should be deleted later
-        ######################################
-        message_list = [
-            {
-                "role": 'user',
-                "content": [
-                    {"text": f'''
-                            <available_docs>{doc_list}</available_docs>
-                            <required_documents>{required_documents}</required_documents>
-                            
-                            Please analyze the documents in <available_docs> against the <required_documents> and determine if any required documents are missing.
-                            '''}
-                ]
-            }
-        ]
-        print 
-        system_message = [
-            {
-                "text": f'''
-                            <required_documents>{', '.join(required_documents)}</required_documents>
-
-                            <task>
-                            You are a meticulous mortgage agent with exceptional attention to detail. Your primary responsibility is to verify the completeness of a mortgage application by ensuring all required documents are present.
-
-                            1. Carefully review the list of required documents in <required_documents>.
-                            2. Examine the provided <available_docs> thoroughly.
-                            3. Identify any required documents that are missing from the <doc_list>.
-                            4. Compile a list of missing document types.
-                            </task>
-                            
-                            <instructions>
-                            1. Compare each item in <required_documents> against the <doc_list>.
-                            2. If a required document is not found in <available_docs>, consider it missing.
-                            3. Be precise in your assessment, avoiding false positives or negatives.
-                            4. Use exact document type names as specified in <required_documents>.
-                            </instructions>
-                            
-                            <output_format>
-                            Provide only a JSON array containing the missing document types. 
-                            Example: ["URLA", "DRIVERS_LICENSE"]
-                            If no documents are missing, return an empty array: []
-                            </output_format>
-                            
-                            <important>
-                            Your response must strictly adhere to the specified JSON array format. Do not include any explanations, additional text, or formatting outside of the JSON array.
-                            </important>
-                            '''
-            }
-        ]
-    
-        response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list, system_message=system_message)       
-        return [response['output']['message']]
-
     def reject_incomplete_application(self, missing_documents):
         # print(json.dumps(missing_documents, indent=4))
         response_message = []
@@ -347,19 +288,19 @@ class IDPTools:
         response_message.append(response['output']['message'])
         return [response_message]
 
-    def extract_urla_loan_info(self, file_paths):
+    def extract_info(self, file_paths, page_num, max_page):
         
-        print (file_paths)
-        file_paths = file_paths['URLA']['file_paths']
+        print(file_paths)
         # Check if there are exactly 9 pages in the URLS
-        if len(file_paths) != 9:
-            raise ValueError(f"Expected 9 file paths, but got {len(file_paths)}")
-    
-        # Get the 5th element. This is the page with the loan info
-        loan_page_path = file_paths[4]
+        if len(file_paths) != max_page:
+            raise ValueError(f"Expected {max_page} file paths, but got {len(file_paths)}")
+        if page_num > max_page or page_num <= 0:
+            raise ValueError(f"Expected page_num to be between 1 and {max_page}, but got {page_num}")
+        # Get the right page. Since this is 1 based index, subtract 1 from the page_num 
+        info_page_path = file_paths[page_num-1]
 
         # Single file handling
-        binary_data, media_type = self.get_binary_for_file(loan_page_path)
+        binary_data, media_type = self.get_binary_for_file(info_page_path)
         if binary_data is None or media_type is None:
             return []
         
@@ -372,103 +313,16 @@ class IDPTools:
                 "role": 'user',
                 "content": [
                     *message_content,
-                    {"text": "extract information from this file?"}
+                    {"text": "Extract information from this file"}
                 ]
             }]
-        response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list)       
+        system_message = [
+            {"text": '''<task>
+                            You are a mortgage agent. 
+                            You have perfect vision. 
+                            You read every field in the document presented to you and make association to the main entities on the document
+                        </task>'''}
+        ]
+        response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list, 
+                                                           system_message=system_message)       
         return [response['output']['message']]
-        
-    def extract_urla_info(self, loan_info, borrower_info, employment_info, assets, liabilities, declarations):
-        self.print_urla_info(loan_info, borrower_info, employment_info, assets, liabilities, declarations)
-        # You would typically process and save the data here
-        # For now, we'll just return the borrower information
-        return {
-            "borrower_info": borrower_info,
-        }
-
-    def extract_drivers_license_information(self, license_info, personal_info):
-        # Print the personal info
-        print("Personal Information:")
-        print(personal_info)
-    
-        # Process and combine all the information
-        extracted_data = {
-            "license_info": license_info,
-            "personal_info": personal_info,
-        }
-    
-        # You can add any additional processing or validation here
-    
-        # Return the extracted and processed data
-        return extracted_data
-    
-    def print_urla_info(self, loan_info, borrower_info, employment_info, assets, liabilities, declarations):
-        # Process loan information
-        print("Loan information:")
-        if loan_info:
-            print(f"  Loan Amount: ${loan_info.get('loan_amount', 'N/A')}")
-            print(f"  Loan Purpose: {loan_info.get('loan_purpose', 'N/A')}")
-            print(f"  Property Address: {loan_info.get('property_address', 'N/A')}")
-            print(f"  Property Value: ${loan_info.get('property_value', 'N/A')}")
-        else:
-            print("  No loan information provided")
-    
-        # Process borrower information
-        print("\nBorrower information:")
-        if borrower_info:
-            print(f"  Name: {borrower_info.get('name', 'N/A')}")
-            print(f"  SSN: {borrower_info.get('ssn', 'N/A')}")
-            print(f"  DOB: {borrower_info.get('dob', 'N/A')}")
-            print(f"  Citizenship: {borrower_info.get('citizenship', 'N/A')}")
-            print(f"  Marital Status: {borrower_info.get('marital_status', 'N/A')}")
-            print(f"  Dependents: {borrower_info.get('dependents', 'N/A')}")
-            print(f"  Current Address: {borrower_info.get('current_address', 'N/A')}")
-        else:
-            print("  No borrower information provided")
-    
-        # Process employment information
-        print("\nEmployment information:")
-        if employment_info:
-            print(f"  Employer Name: {employment_info.get('employer_name', 'N/A')}")
-            print(f"  Position: {employment_info.get('position', 'N/A')}")
-            print(f"  Start Date: {employment_info.get('start_date', 'N/A')}")
-            print(f"  Monthly Income: ${employment_info.get('monthly_income', 'N/A')}")
-        else:
-            print("  No employment information provided")
-    
-        # Process asset information
-        print("\nAsset information:")
-        if assets:
-            for asset in assets:
-                print(f"  Account Type: {asset.get('account_type', 'N/A')}")
-                print(f"  Financial Institution: {asset.get('financial_institution', 'N/A')}")
-                print(f"  Account Number: {asset.get('account_number', 'N/A')}")
-                print(f"  Cash Value: ${asset.get('cash_value', 'N/A')}")
-                print("  ---")
-        else:
-            print("  No asset information provided")
-    
-        # Process liability information
-        print("\nLiability information:")
-        if liabilities:
-            for liability in liabilities:
-                print(f"  Account Type: {liability.get('account_type', 'N/A')}")
-                print(f"  Company Name: {liability.get('company_name', 'N/A')}")
-                print(f"  Account Number: {liability.get('account_number', 'N/A')}")
-                print(f"  Unpaid Balance: ${liability.get('unpaid_balance', 'N/A')}")
-                print(f"  Monthly Payment: ${liability.get('monthly_payment', 'N/A')}")
-                print("  ---")
-        else:
-            print("  No liability information provided")
-    
-        # Process declarations
-        print("\nDeclarations:")
-        if declarations:
-            print(f"  Bankruptcy: {declarations.get('bankruptcy', 'N/A')}")
-            print(f"  Foreclosure: {declarations.get('foreclosure', 'N/A')}")
-            print(f"  Lawsuit: {declarations.get('lawsuit', 'N/A')}")
-            print(f"  Federal Debt: {declarations.get('federal_debt', 'N/A')}")
-        else:
-            print("  No declarations provided")
-    
-        print("\nURLA information processing complete.")

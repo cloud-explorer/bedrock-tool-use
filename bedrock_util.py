@@ -159,7 +159,7 @@ class BedrockUtils:
                 "text": (
                     "Do not make up information. "
                     "Before generating the information check multiple times if the information is correct. "
-                    "If needed go back and read the information provided to inderstand what is being asked." 
+                    "If needed go back and read the information provided to understand what is being asked." 
                 )
             }
         ]

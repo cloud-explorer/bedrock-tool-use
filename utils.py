@@ -7,6 +7,7 @@ import boto3
 import zipfile
 import mimetypes
 import uuid
+import string, random
 from PIL import Image
 from typing import List, Dict
 
@@ -50,23 +51,24 @@ class FileUtility:
 
     def generate_temp_folder_name(self, length=5):
         """
-        Generate a random string of specified length.
+        Generate a temporary folder name with a random suffix.
         
         Args:
-            length (int): The length of the random string. Defaults to 5.
+            length (int): The length of the random suffix. Defaults to 5.
         
         Returns:
-            str: A random string of the specified length.
+            str: A temporary folder name with a random suffix.
         """
         # Define the character set: lowercase letters and digits
         characters = string.ascii_lowercase + string.digits
-
-        # Generate and return the random string
-        suffix = ''.join(random.choice(characters) for _ in range(length))
-
+    
+        # Generate the random suffix
+        random_suffix = ''.join(random.choice(characters) for _ in range(length))
+    
+        # Create the new folder name
         folder_name = "temp"
-        random_suffix = generate_random_suffix()
         new_folder_name = f"{folder_name}_{random_suffix}"
+        
         return new_folder_name
 
 
@@ -164,54 +166,7 @@ class FileUtility:
         except Exception as e:
             print(f"Failed to process file: {str(e)}")
             return [file_path]  # Return the original file if extraction fails
-    '''
-    def pdf_to_png_bytes(self, pdf_path, quality=75, max_size=(1024, 1024)):
-        """
-        Convert a PDF to an array of PNG image bytes.
-
-        Args:
-            pdf_path (str): The path to the PDF file.
-            quality (int): The quality of the PNG images (1-95). Defaults to 75.
-            max_size (tuple): The maximum width and height of the images. Defaults to (1024, 1024).
-    
-        Returns:
-            list: An array of PNG image bytes, one for each page of the PDF.
-        """
-        if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"The file {pdf_path} does not exist.")
-    
-        if not os.access(pdf_path, os.R_OK):
-            raise IOError(f"The file {pdf_path} is not readable.")
-            
-        doc = fitz.open(pdf_path)
-        png_bytes_array = []
-        temp_folder = 'temp'
-        
-        os.makedirs(temp_folder, exist_ok=True)
-    
-        try:
-            for page_num in range(doc.page_count):
-                page = doc.load_page(page_num)
-                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
-                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    
-                if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
-                    image.thumbnail(max_size, Image.Resampling.LANCZOS)
-    
-                temp_file = os.path.join(temp_folder, f"{uuid.uuid4()}.png")
-                image.save(temp_file, format='PNG', optimize=True, quality=quality)
-    
-                with open(temp_file, 'rb') as f:
-                    png_bytes_array.append(f.read())
-    
-                os.remove(temp_file)
-    
-        finally:
-            doc.close()
-            os.rmdir(temp_folder)
-    
-        return png_bytes_array
-    '''
+   
     def pdf_to_jpg_bytes(self, pdf_path, quality=75, max_size=(1024, 1024)):
         """
         Convert a PDF to an array of JPG image bytes.
