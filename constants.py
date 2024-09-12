@@ -12,6 +12,8 @@ class ModelIDs:
     amazon_titan_image_generator_v2 = "amazon.titan-image-generator-v2:0"
     anthropic_claude_v2 = "anthropic.claude-v2"
     anthropic_claude_v2_1 = "anthropic.claude-v2:1"
+    anthropic_claude_3_5_sonnet = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+
     anthropic_claude_3_sonnet = "anthropic.claude-3-sonnet-20240229-v1:0"
     anthropic_claude_3_opus = "anthropic.claude-3-opus-20240229-v1:0"
     anthropic_claude_3_haiku = "anthropic.claude-3-haiku-20240307-v1:0"
@@ -120,7 +122,20 @@ class ToolConfig:
                             "properties": {
                                 "classified_documents": {
                                     "type": "object",
-                                    "description": "Dictionary of document types and their corresponding file paths."
+                                    "properties": {
+                                        "category": {
+                                            "type": "string",
+                                            "enum": ["URLA", "DRIVERS_LICENSE", "UNK"],
+                                            "description": "The category of the document"
+                                        },
+                                        "file_paths": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Paths to the files that were classified for this category. For example of the category is URLA, the array will only contain files that were classified as URLA."
+                                        }
+                                    }
                                 }
                             },
                             "required": ["classified_documents"]
@@ -149,10 +164,41 @@ class ToolConfig:
                     }
                 }
             },
-             {
+            {
                 "toolSpec": {
                     "name": "extract_urla_loan_info",
-                    "description": "Extract loan information from 'Section 4: Loan and Property Information' (page 1) of the Uniform Residential Loan Application (URLA) form.",
+                    "description": "Extract loan information from 'Section 4: Loan and Property Information' of the Uniform Residential Loan Application (URLA) form. Take the input from check_required_documents tool use",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                "urla_document_paths": {
+                                    "type": "object",
+                                    "properties": {
+                                        "file_paths": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "Paths to the files that were classified for this category"
+                                        },
+                                        "category": {
+                                            "type": "string",
+                                            "enum": ["URLA", "DRIVERS_LICENSE", "UNK"],
+                                            "description": "The category of the document"
+                                        }
+                                    }
+                                }
+                            },
+                                
+                        }
+                    }
+                }
+            },
+            {
+                "toolSpec": {
+                    "name": "save_urla_loan_info",
+                    "description": "Save loan information from 'Section 4: Loan and Property Information' of the Uniform Residential Loan Application (URLA) form.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
@@ -189,7 +235,7 @@ class ToolConfig:
             {
                 "toolSpec": {
                     "name": "extract_urla_borrower_info",
-                    "description": "Extract borrower information from 'Section 1: Borrower Information' (page 4) of the Uniform Residential Loan Application (URLA) form.",
+                    "description": "Extract borrower information from 'Section 1: Borrower Information' of the Uniform Residential Loan Application (URLA) form.",
                     "inputSchema": {
                         "json": {
                             "type": "object",
@@ -349,5 +395,4 @@ class ToolConfig:
                     }
                 }
             }
-                  
     ]

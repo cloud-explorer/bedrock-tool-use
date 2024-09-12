@@ -6,7 +6,7 @@ from bedrock_util import BedrockUtils
 from tool_error import ToolError
 
 UNKNOWN_TYPE = "UNK"
-DOCUMENT_TYPES = ["URLA", "W2", "PAY_STUB", "DRIVERS_LICENSE", UNKNOWN_TYPE]
+DOCUMENT_TYPES = ["URLA", "DRIVERS_LICENSE", UNKNOWN_TYPE]
 TEMP_FOLDER = "temp"
 class IDPTools:
 
@@ -14,12 +14,14 @@ class IDPTools:
         
         sonnet_model_id = ModelIDs.anthropic_claude_3_sonnet
         haiku_model_id = ModelIDs.anthropic_claude_3_haiku
+        sonnet35_model_id = ModelIDs.anthropic_claude_3_5_sonnet
         
         self.temp_focused = Temperature.FOCUSED
         self.temp_balanced = Temperature.BALANCED
         
-        self.sonnet_bedrock_utils = BedrockUtils(model_id=sonnet_model_id)
+        self.sonnet_3_bedrock_utils = BedrockUtils(model_id=sonnet_model_id)
         self.haiku_bedrock_utils = BedrockUtils(model_id=haiku_model_id)
+        self.sonnet_3_5_bedrock_utils = BedrockUtils(model_id=sonnet35_model_id)
 
     def get_binary_for_file(self, file_path):
         binary_data = ""
@@ -61,10 +63,19 @@ class IDPTools:
             responses = self.reject_incomplete_application(missing_documents)
             return responses
         elif tool_use_name == 'extract_urla_loan_info':
-            print(tool_use_name)
-            loan_info = tool_use_block['input']['loan_info']
+            # loan_info = tool_use_block['input']['loan_info']
+            # print(loan_info)
             # Save data into DB here
-            return [(json.dumps(loan_info))]
+            # return [(json.dumps(loan_info))]
+            urla_document_paths = tool_use_block['input']['urla_document_paths']
+            return self.extract_urla_loan_info(urla_document_paths)
+        elif tool_use_name == 'save_urla_loan_info':
+            loan_info = tool_use_block['input']['loan_info']
+            print(loan_info)
+            # Save data into DB here
+            # return [(json.dumps(loan_info))]
+            #urla_document_paths = tool_use_block['input']['urla_document_paths']
+            #return self.extract_urla_loan_info(urla_document_paths)
         elif tool_use_name == 'extract_urla_borrower_info':
             borrower_info = tool_use_block['input']['borrower_info']
             # Save data into DB here
@@ -90,10 +101,6 @@ class IDPTools:
             print(tool_use_block['input'])
             personal_info = tool_use_block['input']['personal_info']
             return personal_info
-        elif tool_use_name == 'extract_w2_information':
-            w2_information = tool_use_block['input']['w2_information']
-            responses = self.extract_w2_information(w2_information)
-            return responses
         elif tool_use_name == 'stop_tool':
             stop_reason = tool_use_block['input']['stop_reason']
             print(json.dumps(stop_reason, indent=4))
@@ -148,54 +155,76 @@ class IDPTools:
                     {"text": "What types of document is in this image?"}
                 ]
             }]
-            # print(json.dumps(file_paths, indent=4))
+            # Create a dictionary with "file_paths" as the key and the array of paths as the value
+            data = {"file_paths": file_paths}
+            # Convert the dictionary to a JSON string
+            files = json.dumps(data, indent=2)
             system_message = [{
-                "text": (
-                            "<task>"
-                                "You are a document processing agent and you have perfect vision. "
-                                "Look through every image presented and categorize them based on the <doc_type_choices>. "
-                                "The final output is a json array with an element for each image. "
-                                "Each element in the output array contains the classified_doc_type and the file_path"  
-                            "</task> "
-                            f"<doc_type_choices>{', '.join(DOCUMENT_TYPES)}</doc_type_choices> "
-                            "<output_format>"
-                                "{'docs': [{'type':value_for_doc_type, 'file_paths': array__for_file_path}]}"
-                            "</output_format>"
-                            "In this case PS means pay stub, DL means driver's license, and UNK means unknown. "
-                            "<important>"
-                                "the output has to only be a json array in the <output_format> only. do not include anything else. "
-                            "</important>"
-                            f"<file_paths>{json.dumps(file_paths, indent=4)}</file_paths>"
-                            "<example_output>"
-                                "{"
-                                  "'documents': ["
-                                    "{"
-                                      "'type': 'URLA',"
-                                      "'files': ["
-                                        "'example/1.png',"
-                                        "'example/2.png',"
-                                        "'example/3.png',"
-                                      "]"
-                                    "},"
-                                    "{"
-                                      "'type': 'DL',"
-                                      "'files': ["
-                                        "'example/4.png'"
-                                      "]"
-                                    "},"
-                                    "{"
-                                      "'type': 'W2"
-                                      "'files': ["
-                                        "'example/5.png'"
-                                      "]"
-                                    "}"
-                                  "]"
-                                "}"
-                            "</example_output>"
-                    )
+                "text": f'''
+                        <task>
+                        You are a document processing agent. You have perfect vision. You meticulously analyze the images and categorize them based on these document types:
+                        <document_types>{DOCUMENT_TYPES}</document_types>
+                        </task>
+                        
+                        <input_files>
+                        {files}
+                        </input_files>
+                        
+                        <instructions>
+                        1. Categorize each file into one of the document types.
+                        2. Group files of the same type together.
+                        3. Use 'UNK' for unknown document types.
+                        4. Respond ONLY with a JSON object in the specified format.
+                        </instructions>
+                        
+                        <output_format>
+                        {{
+                          "documents": [
+                            {{
+                              "type": "DOCUMENT_TYPE",
+                              "files": ["file_path1", "file_path2", ...]
+                            }},
+                            ...
+                          ]
+                        }}
+                        </output_format>
+                        
+                        <examples>
+                            <example1>
+                            {{
+                              "documents": [
+                                {{
+                                  "type": "URLA",
+                                  "files": ["example/1.png", "example/2.png", "example/3.png"]
+                                }},
+                                {{
+                                  "type": "DRIVERS_LICENSE",
+                                  "files": ["example/4.png"]
+                                }}
+                              ]
+                            }}
+                            </example1>
+                            
+                            <example2>
+                            {{
+                              "documents": [
+                                {{
+                                  "type": "DRIVERS_LICENSE",
+                                  "files": ["example/5.png"]
+                                }}
+                              ]
+                            }}
+                            </example2>
+                        </examples>
+                        
+                        <important>
+                        Do not include any text outside the JSON object in your response.
+                        Your entire response should be parseable as a single JSON object.
+                        </important>
+                        '''
             }]
 
-            response = self.sonnet_bedrock_utils.invoke_bedrock(
+            response = self.sonnet_3_5_bedrock_utils.invoke_bedrock(
                 message_list=message_list,
                 system_message=system_message
             )
@@ -226,25 +255,72 @@ class IDPTools:
 
         print (f"doc list is {doc_list}")
         required_documents = ["URLA", "DRIVERS_LICENSE"]
+
+        # Check if all required documents are in keys_list
+        all_present = all(doc in keys_list for doc in required_documents)
+        
+        # Find missing documents, if any
+        missing_documents = [doc for doc in required_documents if doc not in keys_list]
+        
+        if all_present:
+            print("All required documents are present.")
+            return []
+        else:
+            print(f"Missing documents: {', '.join(missing_documents)}")
+            return missing_documents
+
+
+        ######################################
+        # TODO: 
+        # Code below here will not be hit
+        # Code left behind just for reference. 
+        # Should be deleted later
+        ######################################
         message_list = [
             {
                 "role": 'user',
                 "content": [
-                    {"text": f"The loan application has the following documents: <doc_list>{doc_list}</doc_list>. Are all the required documents present?"}
+                    {"text": f'''
+                            <available_docs>{doc_list}</available_docs>
+                            <required_documents>{required_documents}</required_documents>
+                            
+                            Please analyze the documents in <available_docs> against the <required_documents> and determine if any required documents are missing.
+                            '''}
                 ]
             }
         ]
-    
+        print 
         system_message = [
             {
-                "text": (
-                    f"<required_documents>{', '.join(required_documents)}</required_documents>"
-                    "<task>You are a mortgage agent with attention to detail. "
-                    "Your main task is to verify if "
-                    "all the documents required (check <required_documents>) for a "
-                    "mortgage application are present. Pay close attention to <doc_list> and determine if the docs are present.</task> <output>only output a json array "
-                    "of the missing document type</output>"
-                )
+                "text": f'''
+                            <required_documents>{', '.join(required_documents)}</required_documents>
+
+                            <task>
+                            You are a meticulous mortgage agent with exceptional attention to detail. Your primary responsibility is to verify the completeness of a mortgage application by ensuring all required documents are present.
+
+                            1. Carefully review the list of required documents in <required_documents>.
+                            2. Examine the provided <available_docs> thoroughly.
+                            3. Identify any required documents that are missing from the <doc_list>.
+                            4. Compile a list of missing document types.
+                            </task>
+                            
+                            <instructions>
+                            1. Compare each item in <required_documents> against the <doc_list>.
+                            2. If a required document is not found in <available_docs>, consider it missing.
+                            3. Be precise in your assessment, avoiding false positives or negatives.
+                            4. Use exact document type names as specified in <required_documents>.
+                            </instructions>
+                            
+                            <output_format>
+                            Provide only a JSON array containing the missing document types. 
+                            Example: ["URLA", "DRIVERS_LICENSE"]
+                            If no documents are missing, return an empty array: []
+                            </output_format>
+                            
+                            <important>
+                            Your response must strictly adhere to the specified JSON array format. Do not include any explanations, additional text, or formatting outside of the JSON array.
+                            </important>
+                            '''
             }
         ]
     
@@ -271,6 +347,37 @@ class IDPTools:
         response_message.append(response['output']['message'])
         return [response_message]
 
+    def extract_urla_loan_info(self, file_paths):
+        
+        print (file_paths)
+        file_paths = file_paths['URLA']['file_paths']
+        # Check if there are exactly 9 pages in the URLS
+        if len(file_paths) != 9:
+            raise ValueError(f"Expected 9 file paths, but got {len(file_paths)}")
+    
+        # Get the 5th element. This is the page with the loan info
+        loan_page_path = file_paths[4]
+
+        # Single file handling
+        binary_data, media_type = self.get_binary_for_file(loan_page_path)
+        if binary_data is None or media_type is None:
+            return []
+        
+        message_content = [
+            {"image": {"format": media_type, "source": {"bytes": data}}}
+            for data in binary_data
+        ]
+
+        message_list = [{
+                "role": 'user',
+                "content": [
+                    *message_content,
+                    {"text": "extract information from this file?"}
+                ]
+            }]
+        response = self.haiku_bedrock_utils.invoke_bedrock(message_list=message_list)       
+        return [response['output']['message']]
+        
     def extract_urla_info(self, loan_info, borrower_info, employment_info, assets, liabilities, declarations):
         self.print_urla_info(loan_info, borrower_info, employment_info, assets, liabilities, declarations)
         # You would typically process and save the data here
@@ -294,27 +401,6 @@ class IDPTools:
     
         # Return the extracted and processed data
         return extracted_data
-
-    def extract_w2_information(self, license_info, personal_info, physical_characteristics, restrictions_endorsements, additional_info):
-        # Print the personal info
-        print("Personal Information:")
-        print(personal_info)
-    
-        # Process and combine all the information
-        extracted_data = {
-            "license_info": license_info,
-            "personal_info": personal_info,
-        }
-    
-        # You can add any additional processing or validation here
-    
-        # Return the extracted and processed data
-        return extracted_data
- 
-    def extract_w2_information(self, w2_information):
-        print("w2_information:")
-        print(w2_information)
-        return w2_information
     
     def print_urla_info(self, loan_info, borrower_info, employment_info, assets, liabilities, declarations):
         # Process loan information

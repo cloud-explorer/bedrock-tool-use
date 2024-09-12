@@ -53,7 +53,7 @@ class BedrockUtils:
             dict: The response from the Bedrock model.
         """
         print(f"Invoking Bedrock model {self.model_id}...")
-    
+        # print(json.dumps(message_list, indent=4))
         response = self.bedrock.converse(
             modelId=self.model_id,
             messages=message_list,
@@ -165,6 +165,7 @@ class BedrockUtils:
         ]
 
         while continue_loop:
+            
             # Call Bedrock API with the current message list and tools
             response = self.invoke_bedrock(message_list=message_list, 
                                            tool_list=tool_list, 
@@ -174,7 +175,7 @@ class BedrockUtils:
             response_message = response['output']['message']
             # Add the response to the message list
             message_list.append(response_message)
-
+            
             # Increment the loop counter
             loop_count = loop_count + 1
 

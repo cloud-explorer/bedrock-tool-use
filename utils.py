@@ -2,13 +2,16 @@ import os
 import requests
 import fitz
 import base64
-from PIL import Image
 import io
 import boto3
 import zipfile
 import mimetypes
 import uuid
-    
+from PIL import Image
+from typing import List, Dict
+
+TEMP_FOLDER = 'temp'
+
 class FileUtility:
     """
     A utility class for handling file operations such as downloading, unzipping, and converting PDFs to base64 encoded PNGs.
@@ -161,7 +164,7 @@ class FileUtility:
         except Exception as e:
             print(f"Failed to process file: {str(e)}")
             return [file_path]  # Return the original file if extraction fails
-
+    '''
     def pdf_to_png_bytes(self, pdf_path, quality=75, max_size=(1024, 1024)):
         """
         Convert a PDF to an array of PNG image bytes.
@@ -208,7 +211,7 @@ class FileUtility:
             os.rmdir(temp_folder)
     
         return png_bytes_array
-
+    '''
     def pdf_to_jpg_bytes(self, pdf_path, quality=75, max_size=(1024, 1024)):
         """
         Convert a PDF to an array of JPG image bytes.
@@ -255,7 +258,6 @@ class FileUtility:
             
         return jpg_bytes_array
 
-    
     def image_to_base64(self, file_path):
         """
         Convert an image file to binary data and determine its media type.
@@ -305,51 +307,95 @@ class FileUtility:
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {str(e)}")
 
-    '''
-        def pdf_to_png_bytes(self, pdf_path, quality=75, max_size=(1024, 1024)):
-            """
-            Convert a PDF to a list of base64 encoded PNG images.
+    def save_pdf_pages_as_png(self, pdf_path: str, quality: int = 75,
+                              max_size: tuple = (1024, 1024)) -> List[str]:
+        """
+        Save pages of a PDF as PNG images.
     
-            Args:
-                pdf_path (str): The path to the PDF file.
-                quality (int): The quality of the PNG images (1-95). Defaults to 75.
-                max_size (tuple): The maximum width and height of the images. Defaults to (1024, 1024).
+        Args:
+            pdf_path (str): The path to the PDF file.
+            quality (int): The quality of the PNG images (1-95). Defaults to 75.
+            max_size (tuple): The maximum width and height of the images. Defaults to (1024, 1024).
     
-            Returns:
-                list: A list of base64 encoded PNG images, one for each page of the PDF.
-            """
+        Returns:
+            List[str]: A list of paths to the saved PNG images.
+        """
+        if not isinstance(pdf_path, str):
+            raise TypeError("pdf_path must be a string")
+        if not os.path.exists(pdf_path):
+            raise FileNotFoundError(f"The file {pdf_path} does not exist.")
+        if not os.access(pdf_path, os.R_OK):
+            raise IOError(f"The file {pdf_path} is not readable.")
+        if not isinstance(quality, int) or quality < 1 or quality > 95:
+            raise ValueError("quality must be an integer between 1 and 95")
+        if not isinstance(max_size, tuple) or len(max_size) != 2:
+            raise ValueError("max_size must be a tuple of two integers")
     
-            if not os.path.exists(pdf_path):
-                raise FileNotFoundError(f"The file {pdf_path} does not exist.")
+        doc = fitz.open(pdf_path)
+        png_paths = []
         
-            if not os.access(pdf_path, os.R_OK):
-                raise IOError(f"The file {pdf_path} is not readable.")
-            try:    
-                doc = fitz.open(pdf_path)
-                #base64_encoded_pngs = []
-                image_pages = []
-        
-                for page_num in range(doc.page_count):
-                    page = doc.load_page(page_num)
-                    pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
-                    image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        
-                    if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
-                        image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-                    image_data = io.BytesIO()
-                    image.save(image_data, format='PNG', optimize=True, quality=quality)
-                    image_data.seek(0)
-                    image_pages.append(image_data.getvalue())
-        
-            except fitz.FileDataError as e:
-                raise ValueError(f"Error processing PDF: {str(e)}")
-            except Exception as e:
-                raise ValueError(f"Unexpected error processing PDF: {str(e)}")
-            finally:
-                doc.close()
-            return image_pages
-
-
-    '''
+        os.makedirs(TEMP_FOLDER, exist_ok=True)
     
+        try:
+            for page_num in range(doc.page_count):
+                page = doc.load_page(page_num)
+                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    
+                if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
+                    image.thumbnail(max_size, Image.Resampling.LANCZOS)
+    
+                temp_file = os.path.join(TEMP_FOLDER, f"{page_num+1}.png")
+                image.save(temp_file, format='PNG', optimize=True, quality=quality)
+                png_paths.append(temp_file)
+    
+        finally:
+            doc.close()
+    
+        return png_paths
+    
+    def get_png_byte_array(self, png_paths: List[str]) -> List[Dict[str, bytes]]:
+        """
+        Get byte arrays from PNG image files.
+    
+        Args:
+            png_paths (List[str]): A list of paths to PNG image files.
+    
+        Returns:
+            List[Dict[str, bytes]]: A list of dictionaries containing the byte array for each PNG image.
+        """
+        if not isinstance(png_paths, list):
+            raise TypeError("png_paths must be a list of strings")
+    
+        png_bytes_array = []
+    
+        for path in png_paths:
+            if not isinstance(path, str):
+                raise TypeError(f"Expected string path, got {type(path)}")
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"The file {path} does not exist.")
+            if not os.access(path, os.R_OK):
+                raise IOError(f"The file {path} is not readable.")
+    
+            with open(path, 'rb') as f:
+                png_bytes_array.append({'binary_data': f.read()})
+            
+            os.remove(path)
+    
+        return png_bytes_array
+    
+    def pdf_to_png_bytes(self, pdf_path: str, quality: int = 75, max_size: tuple = (1024, 1024)) -> List[Dict[str, bytes]]:
+        """
+        Convert a PDF to an array of PNG image bytes.
+    
+        Args:
+            pdf_path (str): The path to the PDF file.
+            quality (int): The quality of the PNG images (1-95). Defaults to 75.
+            max_size (tuple): The maximum width and height of the images. Defaults to (1024, 1024).
+    
+        Returns:
+            List[Dict[str, bytes]]: An array of dictionaries containing PNG image bytes, one for each page of the PDF.
+        """
+        png_paths = self.save_pdf_pages_as_png(pdf_path, quality, max_size)
+        png_bytes = self.get_png_byte_array(png_paths)
+        return png_bytes    
