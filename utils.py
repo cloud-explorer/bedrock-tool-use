@@ -7,6 +7,7 @@ import boto3
 import zipfile
 import mimetypes
 import uuid
+import shutil
 import string, random
 from PIL import Image
 from typing import List, Dict
@@ -353,4 +354,39 @@ class FileUtility:
         """
         png_paths = self.save_pdf_pages_as_png(pdf_path, quality, max_size)
         png_bytes = self.get_png_byte_array(png_paths)
-        return png_bytes    
+        return png_bytes
+
+    def delete_folder(self, folder_path):
+        """
+        Delete all contents of a folder and then delete the folder itself.
+        
+        Args:
+        folder_path (str): Path to the folder to be deleted.
+        
+        Returns:
+        bool: True if deletion was successful, False otherwise.
+        """
+        try:
+            # Check if the folder exists
+            if not os.path.exists(folder_path):
+                print(f"The folder {folder_path} does not exist.")
+                return False
+    
+            # Remove all files and subdirectories
+            for root, dirs, files in os.walk(folder_path, topdown=False):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    os.remove(file_path)
+                for dir in dirs:
+                    dir_path = os.path.join(root, dir)
+                    os.rmdir(dir_path)
+    
+            # Finally, remove the folder itself
+            os.rmdir(folder_path)
+            
+            print(f"Successfully deleted folder: {folder_path}")
+            return True
+    
+        except Exception as e:
+            print(f"An error occurred while deleting the folder: {e}")
+            return False

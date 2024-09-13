@@ -142,7 +142,7 @@ class BedrockUtils:
         """
 
         # Set maximum number of iterations to prevent infinite loops
-        MAX_LOOPS = 10
+        MAX_LOOPS = 20
         loop_count = 0
         continue_loop = True
 
@@ -159,7 +159,8 @@ class BedrockUtils:
                 "text": (
                     "Do not make up information. "
                     "Before generating the information check multiple times if the information is correct. "
-                    "If needed go back and read the information provided to understand what is being asked." 
+                    "If needed go back and read the information provided to understand what is being asked. "
+                    "If there is a clean up tool, please invoke it before calling end_turn"
                 )
             }
         ]

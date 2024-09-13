@@ -374,15 +374,65 @@ class ToolConfig:
             },
             {
                 "toolSpec": {
+                    "name": "verify_applicant_info",
+                    "description": "Compare and detect matches between the URLA (Uniform Residential Loan Application) and Driver's License information.",
+                    "inputSchema": {
+                        "json": {
+                            "type": "object",
+                            "properties": {
+                                "borrower_info": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string",
+                                            "description": "Full name of the borrower from URLA"
+                                        },
+                                        "dob": {
+                                            "type": "string",
+                                            "description": "Date of birth of the borrower from URLA"
+                                        },
+                                        "current_address": {
+                                            "type": "string",
+                                            "description": "Current address of the borrower from URLA"
+                                        }
+                                    },
+                                    "required": ["name", "dob", "current_address"]
+                                },
+                                "license_info": {
+                                    "type": "object",
+                                    "properties": {
+                                        "full_name": {
+                                            "type": "string",
+                                            "description": "Full name of the license holder"
+                                        },
+                                        "address": {
+                                            "type": "string",
+                                            "description": "Current address of the license holder"
+                                        },
+                                        "date_of_birth": {
+                                            "type": "string",
+                                            "description": "Date of birth of the license holder"
+                                        }
+                                    },
+                                    "required": ["full_name", "address", "date_of_birth"]
+                                }
+                            },
+                            "required": ["urla_info", "license_info"]
+                        }
+                    }
+                }
+            },
+            {
+                "toolSpec": {
                     "name": "clean_up_tool",
                     "description": "This tool should always get called as the last tool use. This tool is very important. This will clean up any resources, files or folders that were created",
                     "inputSchema": {
                         "json": {
                             "type": "object",
                             "properties": {
-                                "temp_folder_paths": {
+                                "temp_folder_path": {
                                     "type": "string",
-                                    "description": "Paths to the temporary folder where all the files were stored"
+                                    "description": "Path to the temporary folder where all the files were stored"
                                 }
                             },
                             "required": ["temp_folder_paths"]
